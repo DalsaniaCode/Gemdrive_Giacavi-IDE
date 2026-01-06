@@ -55,7 +55,7 @@ std::vector<unsigned char> importBuffer_root(const char* root) {
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
     std::vector<unsigned char> BufferFile(size);
-    if(file.read(reinterpret cast<char*>(BufferFile.data()), size)){
+    if(file.read(reinterpret_cast<char*>(BufferFile.data()), size)){
         return BufferFile;
     }
     return {};
