@@ -22,7 +22,7 @@ SDL_Texture* PackToTexture_BGRA(SDL_Renderer* mRen, const unsigned char* raw, co
     return mTex;
 }
 
-void CTexture_root(SDL_Renderer* mRen, const char* root){
+SDL_Texture* CTexture_root(SDL_Renderer* mRen, const char* root){
     imageLCT_C mImagePack = importLCT_root(root);
     return PackToTexture_BGRA(mRen, mImagePack.raw, mImagePack.raw_size, mImagePack.da, mImagePack.de);
 }
@@ -71,3 +71,4 @@ int main() {
     return 0;
 
 }
+
