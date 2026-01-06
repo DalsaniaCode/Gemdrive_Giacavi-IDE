@@ -1,6 +1,9 @@
 #include <utility>
 #include <vector>
 #include <cstdint>
+#include <cstdstring>
+#include <cstdlib>
+#include <cstddef>
 #include <unordered_map>
 #include "LCT_decode.h"
 
