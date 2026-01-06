@@ -13,15 +13,11 @@ struct imageLCT_C {
 };
 
 #ifdef __cplusplus
-extern "C" {
-#endif
+    #include <vector>
 
-extern struct imageLCT;
-extern imageLCT importLCT_data;
-extern imageLCT_C dataCpp_C;
-
-#ifdef __cplusplus
-}
+    extern struct imageLCT;
+    extern imageLCT importLCT_data(const std::vector<unsigned char>& mainLCT); // The decodifier content will not be show because it's private, untill 12-Jan-2026
+    extern imageLCT_C dataCpp_C(imageLCT_C mainLCTdata_CPP);
 #endif
 
 #endif // LCT Header
