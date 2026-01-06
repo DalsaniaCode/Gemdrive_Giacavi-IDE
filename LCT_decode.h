@@ -18,6 +18,15 @@ struct imageLCT_C {
     extern struct imageLCT;
     extern imageLCT importLCT_data(const std::vector<unsigned char>& mainLCT); // The decodifier content will not be show because it's private, untill 12-Jan-2026
     extern imageLCT_C dataCpp_C(imageLCT_C mainLCTdata_CPP);
+
+    extern "C" {
+#endif
+
+extern imageLCT_C importLCT_root(const char* root);
+
+#ifdef __cplusplus
+    }
 #endif
 
 #endif // LCT Header
+
