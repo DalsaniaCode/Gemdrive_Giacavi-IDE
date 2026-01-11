@@ -1,51 +1,58 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <SDL3/SDL.h>
+#include "LCT_decodeC.h"
 
-#include <stddef.h>
-#include "LCT_decode.h"
+SDL_Texture* textureLCT_root(SDL_Renderer* mRen, const char* root){
+    struct imageLCT_C mPack = importLCT_root(root);
+    if(mPack.raw == NULL || mPack.raw_size == 0 || mPack.C == 0) return NULL;
 
-SDL_Texture* PackToTexture_BGRA(SDL_Renderer* mRen, const unsigned char* raw, const size_t raw_size, int width, int height){
-    if(!mRen || !raw || width < 1 || height < 1) return NULL;
-    size_t raw_size_Must = (size_t)width * 4 * height;
-    if(raw_size_Must != raw_size) return NULL;
+    SDL_Surface* tr_sur = NULL;
+    SDL_Texture* tr_tex = NULL;
 
-    const int ByteW = width * 4;
-    SDL_Texture* mTex = SDL_CreateTexture(mRen, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STATIC, width, height);
-    if(!mTex) return NULL;
+    const int siep_pitch = mPack.width * 4;
 
-    if(SDL_UpdateTexture(mTex, NULL, (const void*)raw, ByteW) != 0) {
-        SDL_DestroyTexture(mTex);
+    tr_sur = SDL_CreateSurfaceFrom((int)mPack.width, (int)mPack.height, SDL_PIXELFORMAT_BGRA32, mPack.raw, siep_pitch);
+    if(tr_sur == NULL){
+        fprintf(stderr, "Tex load: Surface Failed. %s\n", SDL_GetError());
         return NULL;
     }
-    SDL_SetTextureBlendMode(mTex, SDL_BLENDMODE_BLEND);
 
-    return mTex;
-}
-
-SDL_Texture* CTexture_root(SDL_Renderer* mRen, const char* root){
-    imageLCT_C mImagePack = importLCT_root(root);
-    if(mImagePack.raw != NULL){
-        SDL_Texture* mrTex = PackToTexture_BGRA(mRen, mImagePack.raw, mImagePack.raw_size, mImagePack.da, mImagePack.de);
-        free_CPP(mImagePack.raw);
-        return mrTex;
+    tr_tex = SDL_CreateTextureFromSurface(mRen, tr_sur);
+    if(tr_tex == NULL){
+        fprintf(stderr, "Tex load: Texture Failed. %s\n", SDL_GetError());
     }
-    return NULL;
+
+    SDL_DestroySurface(tr_sur);
+    return tr_tex;
 }
 
-int main() {
+void sTexture(SDL_Renderer* mRen, SDL_Texture* mTex, float xa, float xb, float ya, float yb){
+    SDL_FRect mRect = {xa, ya, xb - xa, yb - ya};
+    SDL_RenderTexture(mRen, mTex, NULL, &mRect);
+}
+
+int main(){
     SDL_Window* win = NULL;
     SDL_Renderer* ren = NULL;
 
-    if(SDL_Init(SDL_INIT_VIDEO) < 0) return 1;
+    if(!SDL_Init(SDL_INIT_VIDEO)){
+        fprintf(stderr, "SDL no initialized. %s\n", SDL_GetError());
+        SDL_Delay(1500);
+        return 1;
+    }
 
-    win = SDL_CreateWindow("Example", 520, 360, 0);
+    win = SDL_CreateWindow("Hello SDL", 800, 600, 0);
     if(win == NULL){
+        fprintf(stderr, "SDL Window no created. %s\n", SDL_GetError());
+        SDL_Delay(1500);
         SDL_Quit();
         return 1;
     }
 
     ren = SDL_CreateRenderer(win, NULL);
     if(ren == NULL){
+        fprintf(stderr, "SDL Renderer no created. %s\n", SDL_GetError());
         SDL_DestroyWindow(win);
         SDL_Quit();
         return 1;
@@ -53,30 +60,33 @@ int main() {
 
     int quit = 0;
     SDL_Event event;
-    SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(ren, 12, 64, 30, 255);
 
-    /* Images */
-    SDL_Texture* IMG_Example = CTexture_root(ren, "BMP_Vault.lct");
-
+    /* Images. On debugging */
+    SDL_Texture* IMG_Example = textureLCT_root(ren, "bmp_vault.lct");
+    
     while(quit == 0){
         while(SDL_PollEvent(&event)){
             switch(event.type){
                 case SDL_EVENT_QUIT:
-                    quit++;
+                    quit = 1;
                     break;
             }
         }
         SDL_RenderClear(ren);
 
-        //Write the graphic project in this line
+        sTexture(ren, IMG_Example, 272.0f, 528.0f, 172.0f, 428.0f);
 
         SDL_RenderPresent(ren);
         SDL_Delay(33);
     }
+
+    /* Images End */
+    SDL_DestroyTexture(IMG_Example);
+
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
 
     return 0;
-
 }
