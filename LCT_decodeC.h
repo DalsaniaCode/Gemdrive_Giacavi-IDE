@@ -1,5 +1,5 @@
-#ifndef BSOFT_LCONSOLETEX_V1_DECODE_C
-#define BSOFT_LCONSOLETEX_V1_DECODE_C
+#ifndef LCONSOLETEX_V1_DECODE_C
+#define LCONSOLETEX_V1_DECODE_C
 
 #include <stdio.h>
 #include <stdlib.h>
