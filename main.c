@@ -8,6 +8,19 @@
 
 #include "LCT_decodeC.h"
 
+long AuxC = 0L;
+void breakPatcher(){
+    printf("Point %ld passed\n", AuxC++);
+    fflush(stdout);
+    SDL_Delay(0033);
+}
+void breakPatcherR(){
+    if(AuxC > 0) AuxC = 0L;
+    printf("Point %ld passed\n", AuxC++);
+    fflush(stdout);
+    SDL_Delay(1000);
+}
+
 SDL_Texture* textureLCT_root(SDL_Renderer* mRen, const char* root){
     struct imageLCT_C mPack = importLCT_root(root);
     if(mPack.raw == NULL || mPack.raw_size == 0 || mPack.C == 0) return NULL;
@@ -62,11 +75,16 @@ font_C importFont_root(const char* root, int mCharW, int mCharH, int mOffset, in
         fprintf(stderr, "importFont: Unvalid Image\n");
         return mFont;
     }
+    if(mPackFT.width == 0 || mPackFT.height == 0){
+        fprintf(stderr, "importFont: Dimensions returned 0\n");
+        return mFont;
+    }
     if((int)mPackFT.width % mCharW != 0 || (int)mPackFT.height % mCharH != 0){
         fprintf(stderr, "importFont: Looks like the Static Charbox size or the F.Template size is incorrect\nIt has an extra size of Width: %d, Height: %d, that must be fixed\n", (int)mPackFT.width % mCharW, (int)mPackFT.height % mCharH);
         return mFont;
     }
     mFont.raw_size = (size_t)(mPackFT.width * mPackFT.height);
+
     if(mPackFT.raw_size / mPackFT.C != mFont.raw_size){
         fprintf(stderr, "importFont: image is not aligned\n");
         return mFont;
@@ -104,7 +122,7 @@ font_C importFont_root(const char* root, int mCharW, int mCharH, int mOffset, in
         mFont.raw[B] = (unsigned char)ValMixer;
         ValMixer = 0;
     }
-    if(mPackFT.raw != NULL) free(mFont.raw);
+    if(mPackFT.raw != NULL) free(mPackFT.raw);
 
     mFont.fullW = (int)mPackFT.width;
     mFont.fullH = (int)mPackFT.height;
@@ -138,12 +156,18 @@ struct imageLCT_C rawCharFromFont(font_C mFont, char mCharANSI, uint32_t lowC, u
         return mCharRP;
     }
 
-    mCharRP.raw_size = (mFont.charW * 4 * mFont.charH);
+    mCharRP.raw_size = (size_t)(mFont.charW * 4 * mFont.charH);
+    if(mCharRP.raw_size == 0){
+        fprintf(stderr, "raw C->Font: size is corrupt or not set\n");
+        return mCharRP;
+    }
+
     mCharRP.raw = (unsigned char*)malloc(mCharRP.raw_size);
     if(mCharRP.raw == NULL){
         fprintf(stderr, "raw C->Font: Raw not allocated\n");
         return mCharRP;
     }
+
     mCharRP.width = mFont.charW;
     mCharRP.height = mFont.charH;
 
@@ -158,28 +182,56 @@ struct imageLCT_C rawCharFromFont(font_C mFont, char mCharANSI, uint32_t lowC, u
 
     const int charTX = mFont.fullW / mFont.charW;
     int lvChar = (unsigned char)mcChar - mFont.ofsChar;
+    float interFloat = 0.0f;
+
+    printf("\nEXTRACTION RESULTS:\n");
+    breakPatcherR();
 
     for(int yCnt = 0; yCnt < mFont.charH; yCnt++){
         for(int xCnt = 0; xCnt < mFont.charW; xCnt++){
             int Xaxis = xCnt + (lvChar % charTX) * mFont.charW;
             int Yaxis = yCnt + (lvChar / charTX) * mFont.charH;
+            breakPatcher(); // 1 / 5
 
             if(Xaxis < 0 || Yaxis < 0 || Xaxis >= mFont.fullW || Yaxis >= mFont.fullH){
-                fprintf(stderr, "We detect that the function is getting more than the expected.\n  Size is W %d, H %d.\n  Coordinates are under or overposing X %d, Y %d.\n", mFont.fullW, mFont.fullH, Xaxis, Yaxis);
-                SDL_Delay(4000);
+                fprintf(stderr, "raw C->Font: Char Raw Proccess: We detect that the function is getting more than the expected.\n  Size is W %d, H %d.\n  Coordinates are under or overposing X %d, Y %d.\n", mFont.fullW, mFont.fullH, Xaxis, Yaxis);
                 return mCharRP;
             }
+            breakPatcher(); // 2 / 5
+
+            int PXrawI = Xaxis + (Yaxis * mFont.fullW);
+            if(PXrawI >= (int)mFont.raw_size || PXrawI < 0){
+                fprintf(stderr, "raw C->Font: Char Raw Proccess: (Color proccess) The index is out of the size limit!\n  Total Font Size: %d\n  Index Returned Size: %d\n", (int)mFont.raw_size, PXrawI);
+                return mCharRP;
+            }
+            breakPatcher(); // 3 / 5
 
             for(int C = 0; C < 4; C++){
-                interC[C] = (float)((lowC >> (C * 8)) & 0xFF);
-                interC[C] += (float)difC[C] * ((float)mFont.raw[Xaxis + (Yaxis * mFont.fullW)] / 255.0f);
+                interFloat = (float)((lowC >> (C * 8)) & 0xFF);
+                interFloat += (float)difC[C] * ((float)mFont.raw[PXrawI] / 255.0f);
+                if(interFloat < 0){
+                    interFloat = 0.0f;
+                }else if(interFloat > 255.0f){
+                    interFloat = 255.0f;
+                }
+                
+                interC[C] = (unsigned char)interFloat;
             }
+            breakPatcher(); // 4 / 5
+
             for(int C = 0; C < 4; C++){
-                mCharRP.raw[C + (xCnt + (yCnt * mCharRP.width)) * 4] = interC[C];
+                PXrawI = C + ((xCnt + (yCnt * mCharRP.width)) * 4);
+                if(PXrawI >= (int)mCharRP.raw_size || PXrawI < 0){
+                    fprintf(stderr, "raw C->Font: Char Raw Proccess: (Raw writting) The index is out of the size limit!\n  Char Size: %d\n  Index Returned Size: %d\n", (int)mCharRP.raw_size, PXrawI);
+                    return mCharRP;
+                }
+                mCharRP.raw[PXrawI] = interC[C];
             }
+            breakPatcher(); // 5 / 5
         }
     }
     mCharRP.C = 4;
+    breakPatcherR(); // SUCCESFULLLLLL
     return mCharRP;
 }
 
@@ -240,10 +292,10 @@ int main(){
     /* Fonts */
     printf("Loading Font... ");
     SDL_Delay(2000);
-    font_C FNT_PremierClassic = importFont_root("font/fontN-Wwes-12-20 Premier_Classic.lct", 12, 20, 0x20, 2);
+    font_C FNT_PremierClassic = importFont_root("font/fontN-Wwes-12-20 Premier_Classic.lct", 12, 20, 32, 2);
     printf("DONE\nLoading Character Raw... ");
     SDL_Delay(2000);
-    struct imageLCT_C IMGP_CharD = rawCharFromFont(FNT_PremierClassic, 'A', 0x00000000, 0xFF96CF83);
+    struct imageLCT_C IMGP_CharD = rawCharFromFont(FNT_PremierClassic, '!', 0x00000000, 0xFFA0E391);
     printf("DONE\nCreating Texture... ");
     SDL_Delay(2000);
     SDL_Texture* IMG_CharD = NULL;
@@ -278,5 +330,4 @@ int main(){
     SDL_Quit();
 
     return 0;
-
 }
