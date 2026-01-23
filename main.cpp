@@ -1,3 +1,7 @@
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
 #include <iostream>
 #include <SDL3/SDL.h>
 
@@ -43,7 +47,15 @@ int main(){
 
     SDL_Event event;
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
-    while(quit == 0){
+
+    //This sone proves that I'm testing UTF-8 to Win1252 codec text conversion.
+    #ifdef _WIN32
+    SetConsoleOutputCP(1252);
+    #endif
+    std::string TextTesty = "Gemdrive Softwares © 2026 - Spräche Deutsch"; // No. I don't talk German. I Speak English
+    std::cout << UTF8_to_win1252_SS(TextTesty) << std::endl;
+    
+    while(!quit){
         while(SDL_PollEvent(&event)){
             switch(event.type){
                 case SDL_EVENT_QUIT:
