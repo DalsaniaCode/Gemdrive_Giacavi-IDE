@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <utility>
 
 extern "C"{
     #include "LCT_decodeC.h"
@@ -15,6 +16,8 @@ extern "C"{
 
 // Text Codec Tools
 std::string UTF8_to_win1252_SS(const std::string& mSString){
+    if(mSString.empty()) return "";
+
     U16char_ps mS16b = UTF8_to_16b(mSString.c_str());
     if(mS16b.string == nullptr) return "";
 
@@ -28,6 +31,26 @@ std::string UTF8_to_win1252_SS(const std::string& mSString){
     S8b_free(mtS8b);
     return frString8b;
 }
+uint16_t UTF8_to_16b_oneChar(const std::string& mSChar){
+    if(mSChar.empty()) return 0;
+
+    U16char_ps mtcC16b = UTF8_to_16b(mSChar.c_str());
+    if(mtcC16b.string == nullptr) return "";
+
+    uint16_t mC16b = mtcC16b.string[0];
+    S16b_free(mtcC16b);
+    return mC16b;
+}
+std::u16string UTF8_to_16b_SS(const std::string& mSString){
+    if(mSString.empty()) return u"";
+
+    U16char_ps mtS16b = UTF8_to_16b(mSString.c_str());
+    if(mtS16b.string == nullptr) return u"";
+
+    std::u16string mS16b(reinterpret_cast<char16_t*>(mtS16b.string), mtS16b.size);
+    S16b_free(mtS16b);
+    return mS16b;
+} 
 
 // Image & Font Tools
 struct imgPack{
@@ -136,6 +159,93 @@ SDL_Texture* textureImage(SDL_Renderer* mRen, const imgPack& mipImage){
     return mtrTex;
 }
 
+imgPack customizeCharFF(const fontPack& mFont, uint16_t sChar, uint32_t lColor, uint32_t hColor){
+    uint16_t mfxChar = sChar;
+    mfxChar = static_cast<uint16_t>((int)mfxChar < mFont.valS ? mFont.valS & 0xFFFF : ((int)mfxChar > mFont.valE ? mFont.valE & 0xFFFF : mfxChar));
+
+    std::pair<int,int> fontPlace = {mFont.fullW / mFont.charW, mFont.fullH / mFont.charH};
+    std::pair<int,int> charUbication = {(mfxChar - mFont.valS) % fontPlace.first, (mfxChar - mFont.valS) / fontPlace.second};
+
+    imgPack mipBChar;
+    mipBChar.C = 0;
+    mipBChar.width = mFont.charW;
+    mipBChar.height = mFont.charH;
+
+    std::vector<float> CIDiference;
+    for(int C = 0; C < 4; C++){
+        int lSValC = (lColor >> (C << 3)) & 0xFF;
+        int hSValC = (hColor >> (C << 3)) & 0xFF;
+        CIDiference.push_back(static_cast<float>(hSValC - lSValC));
+        CIDiference[C] = CIDiference[C] < -255.0f ? -255.0f : (CIDiference[C] > 255.0f ? 255.0f : CIDiference[C]);
+    }
+    if(CIDiference.size != 4){
+        std::cerr << "CIDiference list size is not 4. It resulted with a size of " << CIDiference.size() << " (customizeCharFF / err 0)" << std::endl;
+        return mipBChar;
+    }
+
+    int ColInterpoled = 0;
+    for(int YCcut = 0; YCcut < (int)mFont.charW; YCcut++){
+        for(int XCcut = 0; XCcut < (int)mFont.charW; XCcut++){
+            int svPixelCutI = XCcut + (charUbication.first * (int)mFont.charW) + (YCut + (charUbication.second * (int)mFont.charH)) * (int)mFont.fullW;
+            for(int C = 0; C < 4; C++){
+                if(svPixelCutI < 0 || svPixelCutI >= static_cast<int>(mFont.raw.size())){
+                    std::cout << "Result is going out the limits. That part will fill with a Semi-transparent Blue color (customizeCharFF / warn 0)" << std::endl;
+                    mipBChar.raw.push_back(0xFF);
+                    mipBChar.raw.push_back(0x00);
+                    mipBChar.raw.push_back(0x00);
+                    mipBChar.raw.push_back(0x80);
+                    break;
+                }
+
+                ColInterpoled = static_cast<int>((lColor >> (C << 3)) & 0xFF) + static_cast<int>(CIDiference[C] * (static_cast<float>(mFont.raw[svPixelCutI]) / 255.0f));
+                ColInterpoled = ColInterpoled < 0 ? 0 : (ColInterpoled > 255 ? 255 : ColInterpoled);
+                mipBChar.raw.push_back(static_cast<unsigned char>(ColInterpoled & 0xFF));
+            }
+        }
+    }
+
+    if(static_cast<uint32_t>(mipBChar.raw.size()) != mipBChar.width * 4 * mipBChar.height){
+        std::cout << "Raw size was not expected";
+        if(mipBChar.raw.size() % 4 != 0) std::cout << " and color data it's not aligned into RGBA";
+        std::cout << ", So it will fill with a Semi-transparent Blue color (customizeCharFF / warn 1)" << std::endl;
+        switch(mipBChar.raw.size() % 4){
+            case 1:
+                mipBChar.raw.push_back(0x00);
+            case 2:
+                mipBChar.raw.push_back(0x00);
+            case 3:
+                mipBChar.raw.push_back(0x80);
+        }
+        while(mipBChar.raw.size() < static_cast<size_t>(mipBChar.width * 4 * mipBChar.height)){
+            switch(mipBChar.raw.size() % 4){
+                case 0:
+                    mipBChar.raw.push_back(0xFF);
+                case 1:
+                    mipBChar.raw.push_back(0x00);
+                case 2:
+                    mipBChar.raw.push_back(0x00);
+                case 3:
+                    mipBChar.raw.push_back(0x80);
+            }
+        }
+    }
+
+    if(mipBChar.raw.size() > mipBChar.width * 4 * mipBChar.height){
+        std::cout << "Raw size is major than expected (warn 2)" << std::endl;
+        mipBChar.raw.resize(mipBChar.width * 4 * mipBChar.height);
+    }
+
+    mipBChar.C = 4;
+    return mipBChar;
+}
+
+char getOnlyChar_8b(std::string mUnChar){
+    return mUnChar.empty() ? 0 : mUnChar[0];
+}
+uint16_t getOnlyChar_16b(std::u16string mUnChar16){
+    return static_cast<uint16_t>(mUnChar16.empty() ? 0 : mUnChar16[0]);
+}
+
 int main(){
     SDL_Window *win = nullptr;
     SDL_Renderer *ren = nullptr;
@@ -167,6 +277,15 @@ int main(){
     std::string TextTesty = "Gemdrive Softwares © 2026 - Spräche Deutsch";
     std::cout << UTF8_to_win1252_SS(TextTesty) << std::endl;
 
+    // Fonts
+    const fontPack FNT_Premier_Classic = importFont_root("font/fontN-Wwes-12-20 Premier_Classic.lct", 12, 20, 0x20, 0xFF, 2);
+
+    /* This part is made for testing, and this code will be changed if we go more advanced */
+    imgPack IMGP_CharCIP = customizeCharFF(FNT_Premier_Classic, static_cast<uint16_t>(getOnlyChar(UTF8_to_win1252_SS("a"))), 0x00FFFFFF, 0xFFFFFFFF);
+    SDL_Texture* TEX_CharDT = textureImage(ren, IMGP_CharCIP);
+    SDL_FRect charRect = {0, 0, 12, 20};
+    /* End of the Case */
+
     while(!quit){
         while(SDL_PollEvent(&event)){
             switch(event.type){
@@ -177,9 +296,13 @@ int main(){
         }
         SDL_RenderClear(ren);
 
+        if(TEX_CharDT != nullptr) SDL_RenderTexture(ren, TEX_CharDT, nullptr, &charRect);
+
         SDL_RenderPresent(ren);
         SDL_Delay(33);
     }
+
+    SDL_DestroyTexture(TEX_CharDT);
 
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
